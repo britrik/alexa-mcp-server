@@ -1,21 +1,23 @@
 # Minimal Setup Guide
 
-Super simple setup - just paste 2 cookie values from Amazon.com!
+Super simple setup - set the Alexa base URL, marketplace, and paste 2 cookie values from your regional Amazon Alexa site!
 
 ## Quick Setup (2 minutes)
 
-1. **Login to amazon.com** in your browser
+1. **Login to your regional Amazon Alexa site** in your browser
 
 2. **Open DevTools** (F12) → Network tab
 
-3. **Find any request** and copy these 2 cookie values:
-   - `ubid-main=133-678-78910` 
+3. **Find any request** and copy these values:
+   - `ubid-main=133-678-78910`
    - `at-main=Atza|IwEBIA-fRecN...` (long token)
+   - `ALEXA_BASE_URL=https://alexa.amazon.co.uk`
+   - `ALEXA_MARKETPLACE_ID=A1F8U5RK5OH7Y3`
 
 4. **Configure:**
    ```bash
    cp .env.example .env
-   # Edit .env - just paste the 2 values!
+   # Edit .env - paste the 2 cookie values and regional Alexa settings
    ```
 
 5. **Deploy:**
@@ -68,4 +70,4 @@ The server automatically detects your cookie type and:
 
 - **403/401 errors**: Cookies expired, get fresh ones
 - **Device not found**: Wait 1-2 minutes for discovery cache
-- **Announcements fail**: Need Alexa app cookies (amazon.com limited)
+- **Announcements fail**: Need Alexa app cookies for the configured regional Alexa site
