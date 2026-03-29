@@ -1,7 +1,17 @@
 import type { Env, PowerStateCapability } from "@/types/alexa";
 import { getAccountInfo, getCustomerSmartHomeEndpoints } from "@/utils/alexa-dynamic";
 
-export const ALEXA_ENDPOINT = "https://alexa.amazon.com/api/phoenix/state";
+export function getAlexaBaseUrl(env: Env): string {
+	return env.ALEXA_BASE_URL.replace(/\/+$/, "");
+}
+
+export function alexaUrl(env: Env, path: string): string {
+	return new URL(path, `${getAlexaBaseUrl(env)}/`).toString();
+}
+
+export function getAlexaEndpoint(env: Env): string {
+	return alexaUrl(env, "/api/phoenix/state");
+}
 
 // Dynamic account ID helper
 export async function getAccountId(env: Env): Promise<string> {
@@ -51,7 +61,7 @@ export async function isAnyLightOn(env: Env): Promise<boolean | null> {
 			],
 		});
 
-		const res = await fetch(ALEXA_ENDPOINT, {
+		const res = await fetch(getAlexaEndpoint(env), {
 			method: "POST",
 			headers: buildAlexaHeaders(env, { "Content-Type": "application/json; charset=utf-8" }),
 			body,
@@ -119,7 +129,7 @@ export async function getAmazonMusicPlayback(env: Env) {
 		return null;
 	}
 
-	const npUrl = `https://alexa.amazon.com/api/np/list-media-sessions?deviceSerialNumber=${deviceSerial}&deviceType=${deviceType}`;
+	const npUrl = alexaUrl(env, `/api/np/list-media-sessions?deviceSerialNumber=${deviceSerial}&deviceType=${deviceType}`);
 	console.log("Music: Fetching from URL:", npUrl);
 
 	const res = await fetch(npUrl, {
