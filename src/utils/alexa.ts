@@ -1,5 +1,7 @@
 import type { Env, PowerStateCapability } from "@/types/alexa";
 import { getAccountInfo, getCustomerSmartHomeEndpoints } from "@/utils/alexa-dynamic";
+import { DEFAULT_ALEXA_MARKETPLACE_ID } from "@/utils/marketplace";
+import { getAlexaSessionCredentials } from "@/utils/session";
 
 export function getAlexaBaseUrl(env: Env): string {
 	return env.ALEXA_BASE_URL.replace(/\/+$/, "");
@@ -23,9 +25,13 @@ export async function getAccountId(env: Env): Promise<string> {
 const USER_AGENT =
 	"PitanguiBridge/2.2.629941.0-[PLATFORM=Android][MANUFACTURER=samsung][RELEASE=12][BRAND=Redmi][SDK=31][MODEL=SM-S928B]";
 
-export function buildAlexaHeaders(env: Env, additional: Record<string, string> = {}) {
-	// Build cookie string from individual components
-	const cookieString = `csrf=1; ubid-main=${env.UBID_MAIN}; at-main=${env.AT_MAIN}`;
+export async function buildAlexaHeaders(env: Env, additional: Record<string, string> = {}) {
+	const session = await getAlexaSessionCredentials(env);
+	if (!session) {
+		throw new Error("Missing Alexa session credentials");
+	}
+
+	const cookieString = `csrf=1; ubid-main=${session.ubidMain}; at-main=${session.atMain}`;
 
 	const headers: Record<string, string> = {
 		Cookie: cookieString,
@@ -63,7 +69,7 @@ export async function isAnyLightOn(env: Env): Promise<boolean | null> {
 
 		const res = await fetch(getAlexaEndpoint(env), {
 			method: "POST",
-			headers: buildAlexaHeaders(env, { "Content-Type": "application/json; charset=utf-8" }),
+			headers: await buildAlexaHeaders(env, { "Content-Type": "application/json; charset=utf-8" }),
 			body,
 		});
 
@@ -133,7 +139,170 @@ export async function getAmazonMusicPlayback(env: Env) {
 	console.log("Music: Fetching from URL:", npUrl);
 
 	const res = await fetch(npUrl, {
-		headers: buildAlexaHeaders(env),
+		headers: await buildAlexaHeaders(env),
+	});
+
+	if (!res.ok) return null;
+
+	type NPResponse = {
+		mediaSessionList?: Array<{
+			nowPlayingData?: {
+				infoText?: {
+					title?: string;
+					subText1?: string; // artist
+					subText2?: string; // album / mix
+				};
+				mainArt?: {
+					mediumUrl?: string;
+					largeUrl?: string;
+					smallUrl?: string;
+					tinyUrl?: string;
+					fullUrl?: string;
+				};
+			};
+		}>;
+	};
+export function getAlexaBaseUrl(env: Env): string {
+	return env.ALEXA_BASE_URL.replace(/\/+$/, "");
+}
+
+export function getAlexaMarketplaceId(env: Pick<Env, "ALEXAMARKETPLACEID" | "ALEXA_MARKETPLACE_ID">): string {
+	return env.ALEXAMARKETPLACEID?.trim() || env.ALEXA_MARKETPLACE_ID?.trim() || DEFAULT_ALEXA_MARKETPLACE_ID;
+}
+
+export function alexaUrl(env: Env, path: string): string {
+	return new URL(path, `${getAlexaBaseUrl(env)}/`).toString();
+}
+
+export function getAlexaEndpoint(env: Env): string {
+	return alexaUrl(env, "/api/phoenix/state");
+}
+
+// Dynamic account ID helper
+export async function getAccountId(env: Env): Promise<string> {
+	const accountInfo = await getAccountInfo(env);
+	return accountInfo.customerId;
+}
+
+// Shared User-Agent and header helpers
+const USER_AGENT =
+	"PitanguiBridge/2.2.629941.0-[PLATFORM=Android][MANUFACTURER=samsung][RELEASE=12][BRAND=Redmi][SDK=31][MODEL=SM-S928B]";
+
+export async function buildAlexaHeaders(env: Env, additional: Record<string, string> = {}) {
+	const session = await getAlexaSessionCredentials(env);
+	if (!session) {
+		throw new Error("Missing Alexa session credentials");
+	}
+
+	const cookieString = `csrf=1; ubid-main=${session.ubidMain}; at-main=${session.atMain}`;
+
+	const headers: Record<string, string> = {
+		Cookie: cookieString,
+		Csrf: "1",
+		Accept: "application/json; charset=utf-8",
+		"Accept-Language": "en-US",
+		"User-Agent": USER_AGENT,
+		...additional,
+	};
+
+	return headers;
+}
+
+// Note: State request body is now dynamically generated in bedroom handler
+
+// Helper to check if any light is currently ON via Alexa Phoenix state
+export async function isAnyLightOn(env: Env): Promise<boolean | null> {
+	const { UBID_MAIN, AT_MAIN } = env;
+	if (!UBID_MAIN || !AT_MAIN) return null;
+
+	try {
+		const { getPrimaryLight, extractEntityId } = await import("./alexa-dynamic");
+		const primaryLight = await getPrimaryLight(env);
+		const entityId = extractEntityId(primaryLight);
+
+		const body = JSON.stringify({
+			stateRequests: [
+				{
+					entityId,
+					entityType: "APPLIANCE",
+					properties: [{ namespace: "Alexa.PowerController", name: "powerState" }],
+				},
+			],
+		});
+
+		const res = await fetch(getAlexaEndpoint(env), {
+			method: "POST",
+			headers: await buildAlexaHeaders(env, { "Content-Type": "application/json; charset=utf-8" }),
+			body,
+		});
+
+		if (!res.ok) return null;
+
+		const data = (await res.json()) as { deviceStates?: Array<{ capabilityStates: string[] }> };
+		const powerCap = data.deviceStates?.[0]?.capabilityStates
+			.flatMap((raw) => {
+				try {
+					return [JSON.parse(raw) as PowerStateCapability];
+				} catch {
+					return [];
+				}
+			})
+			.find((cap) => cap.namespace === "Alexa.PowerController" && cap.name === "powerState");
+
+		return powerCap ? powerCap.value === "ON" : null;
+	} catch (error) {
+		console.warn("Failed to check light state:", error);
+		return null;
+	}
+}
+
+// Helper to get now-playing info from Amazon Music via Alexa NP endpoint
+export async function getAmazonMusicPlayback(env: Env) {
+	const { UBID_MAIN, AT_MAIN } = env;
+
+	if (!UBID_MAIN || !AT_MAIN) return null;
+
+	// Get Echo device from GraphQL endpoint (has proper serial/deviceType)
+	let deviceSerial: string;
+	let deviceType: string;
+	try {
+		const endpoints = await getCustomerSmartHomeEndpoints(env);
+		
+		// Find Echo device (ALEXA_VOICE_ENABLED category)
+		const echoDevice = endpoints.find((endpoint: any) => {
+			const primaryCategory = endpoint.displayCategories?.primary?.value;
+			return primaryCategory === "ALEXA_VOICE_ENABLED";
+		});
+		
+		if (!echoDevice) {
+			console.warn("No Echo device found for music queries");
+			return null;
+		}
+		
+		// Extract serial number and device type from DMS identifier
+		deviceSerial = echoDevice.legacyIdentifiers?.dmsIdentifier?.deviceSerialNumber?.value?.text;
+		deviceType = echoDevice.legacyIdentifiers?.dmsIdentifier?.deviceType?.value?.text;
+		
+		if (!deviceSerial || !deviceType) {
+			console.warn("Missing serial number or device type for Echo device");
+			return null;
+		}
+		
+		console.log("Music: Using Echo device:", {
+			serialNumber: deviceSerial,
+			deviceType: deviceType,
+			friendlyName: echoDevice.friendlyName
+		});
+	} catch (error) {
+		console.warn("Failed to get Echo device from GraphQL:", error);
+		return null;
+	}
+
+	const npUrl = alexaUrl(env, `/api/np/list-media-sessions?deviceSerialNumber=${deviceSerial}&deviceType=${deviceType}`);
+	console.log("Music: Fetching from URL:", npUrl);
+
+	const res = await fetch(npUrl, {
+		headers: await buildAlexaHeaders(env),
 	});
 
 	if (!res.ok) return null;
