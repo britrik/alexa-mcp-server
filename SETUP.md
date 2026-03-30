@@ -1,29 +1,42 @@
 # Minimal Setup Guide
 
-Super simple setup - set the Alexa base URL, marketplace, and paste 2 cookie values from your regional Amazon Alexa site!
+Super simple setup - set the Alexa base URL, marketplace, and keep the cookie values out of the repo.
 
 ## Quick Setup (2 minutes)
 
-1. **Login to your regional Amazon Alexa site** in your browser
+1. Login to your regional Amazon Alexa site in your browser.
 
-2. **Open DevTools** (F12) → Network tab
+2. Open DevTools (F12) → Network tab.
 
-3. **Find any request** and copy these values:
-   - `ubid-main=133-678-78910`
-   - `at-main=Atza|IwEBIA-fRecN...` (long token)
+3. Find any request and copy the local browser values you need:
+   - `ubid-main` cookie value
+   - `at-main` cookie value
    - `ALEXA_BASE_URL=https://alexa.amazon.co.uk`
    - `ALEXA_MARKETPLACE_ID=A1F8U5RK5OH7Y3`
 
-4. **Configure:**
+4. Configure local env only:
    ```bash
    cp .env.example .env
-   # Edit .env - paste the 2 cookie values and regional Alexa settings
+   # Edit .env - paste the cookie values and secrets locally
    ```
 
-5. **Deploy:**
+5. Deploy:
    ```bash
    pnpm install && pnpm run deploy
    ```
+
+## Cookie rotation / session refresh
+
+The Playwright rotation script in `scripts/rotate-alexa-session.ts` reads cookies from a local browser context, posts them to `POST /update-session`, and never prints the cookie values.
+
+Run it with `pnpm run rotate:session` once the local browser profile has the Alexa session you want to rotate.
+
+Required runtime secrets:
+- `UPDATE_SESSION_TOKEN` for request signing
+- `SESSION_ENCRYPTION_KEY` for KV encryption
+- `SESSION_KV` binding for encrypted cookie storage
+
+Do not commit any cookie values, tokens, or browser profile data.
 
 ## Local Development & Testing
 
@@ -42,8 +55,11 @@ Super simple setup - set the Alexa base URL, marketplace, and paste 2 cookie val
    ```bash
    wrangler secret put UBID_MAIN
    wrangler secret put AT_MAIN
+   wrangler secret put UPDATE_SESSION_TOKEN
+   wrangler secret put SESSION_ENCRYPTION_KEY
    ```
-3. Use the provided base URL as your `API_BASE`
+3. Add a KV binding named `SESSION_KV` and use it only for encrypted session storage.
+4. Use the provided base URL as your `API_BASE`
 
 **That's it!** The server automatically builds proper cookies with `csrf=1`
 
@@ -61,13 +77,13 @@ Super simple setup - set the Alexa base URL, marketplace, and paste 2 cookie val
 
 The server automatically detects your cookie type and:
 
-- **Amazon.com cookies**: Uses CSRF format for web APIs
-- **Alexa app cookies**: Uses mobile authentication format  
-- **Auto-discovery**: Dynamically finds your devices and account ID
-- **Caching**: Reduces API calls with 5-minute cache
+- Amazon.com cookies: Uses CSRF format for web APIs
+- Alexa app cookies: Uses mobile authentication format
+- Auto-discovery: Dynamically finds your devices and account ID
+- Caching: Reduces API calls with 5-minute cache
 
 ## Troubleshooting
 
-- **403/401 errors**: Cookies expired, get fresh ones
-- **Device not found**: Wait 1-2 minutes for discovery cache
-- **Announcements fail**: Need Alexa app cookies for the configured regional Alexa site
+- 403/401 errors: Cookies expired, get fresh ones
+- Device not found: Wait 1-2 minutes for discovery cache
+- Announcements fail: Need Alexa app cookies for the configured regional Alexa site
