@@ -8,6 +8,7 @@
 		"format": "biome format --write",
 		"lint": "biome lint",
 		"lint:fix": "biome lint --fix",
+		"rotate:session": "bun scripts/rotate-alexa-session.ts",
 		"start": "wrangler dev",
 		"cf-typegen": "wrangler types",
 		"type-check": "tsc --noEmit"
