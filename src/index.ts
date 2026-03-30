@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { announceHandler } from "@/api/v1/announce";
+import { updateSessionHandler } from "@/api/v1/update-session";
 // Import API route handlers
 import { bedroomHandler } from "@/api/v1/bedroom";
 import { lightsApp } from "@/api/v1/lights";
@@ -23,6 +24,7 @@ app.get("/", (c) => {
 		version: "1.0.0",
 		endpoints: {
 			api: "/api",
+			updateSession: "/update-session",
 			bedroom: "/api/bedroom",
 			announce: "/api/announce",
 			music: "/api/music",
@@ -33,8 +35,7 @@ app.get("/", (c) => {
 			mcp: "/mcp",
 			sse: "/sse",
 			health: "/health",
-		},
-	});
+		});
 });
 
 // Health endpoint
@@ -44,6 +45,9 @@ app.get("/health", (c) => {
 		timestamp: new Date().toISOString(),
 	});
 });
+
+app.post("/update-session", updateSessionHandler);
+app.post("/api/v1/update-session", updateSessionHandler);
 
 // API v1 routes
 app.get("/api/bedroom", bedroomHandler);
