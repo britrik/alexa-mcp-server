@@ -66,11 +66,28 @@ export class HomeIOMCP extends McpAgent<Env> {
 			(args, ctx) => listLights(args, { ...ctx, env: this.env }),
 		);
 
+		const setLightPowerTool = (args: z.infer<typeof setLightPowerSchema>, ctx: any) =>
+			setLightPower(args, { ...ctx, env: this.env });
+
 		this.server.tool(
 			"set_light_power",
 			"Turn smart light on or off. If you have only one light, no ID needed - it will be auto-detected.",
 			setLightPowerSchema.shape,
-			(args, ctx) => setLightPower(args, { ...ctx, env: this.env }),
+			setLightPowerTool,
+		);
+
+		this.server.tool(
+			"setlightpower",
+			"Turn smart light on or off. If you have only one light, no ID needed - it will be auto-detected.",
+			setLightPowerSchema.shape,
+			setLightPowerTool,
+		);
+
+		this.server.tool(
+			"set_light",
+			"Turn smart light on or off. If you have only one light, no ID needed - it will be auto-detected.",
+			setLightPowerSchema.shape,
+			setLightPowerTool,
 		);
 
 		this.server.tool(

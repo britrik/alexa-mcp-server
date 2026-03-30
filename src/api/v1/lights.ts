@@ -8,7 +8,7 @@ import type {
 	PowerStateCapability,
 } from "@/types/alexa";
 import type { Env } from "@/types/env";
-import { buildAlexaHeaders } from "@/utils/alexa";
+import { alexaUrl, buildAlexaHeaders } from "@/utils/alexa";
 import {
 	buildEndpointId,
 	extractEntityId,
@@ -20,8 +20,6 @@ import {
 const lightsApp = new Hono<{ Bindings: Env }>();
 
 // Amazon Alexa endpoints
-const ALEXA_PHOENIX_ENDPOINT = "https://alexa.amazon.com/api/phoenix/state";
-const ALEXA_NEXUS_ENDPOINT = "https://alexa.amazon.com/nexus/v1/graphql";
 
 // Helper to get primary light dynamically
 async function getPrimaryLightIds(env: Env) {
@@ -80,7 +78,7 @@ async function getLightState(c: Context<{ Bindings: Env }>, entityId: string) {
 		],
 	});
 
-	const res = await fetch(ALEXA_PHOENIX_ENDPOINT, {
+	const res = await fetch(alexaUrl(c.env, "/api/phoenix/state"), {
 		method: "POST",
 		headers: buildAlexaHeaders(c.env, { "Content-Type": "application/json; charset=utf-8" }),
 		body: requestBody,
@@ -119,7 +117,7 @@ async function controlLight(
 		],
 	});
 
-	const res = await fetch(ALEXA_PHOENIX_ENDPOINT, {
+	const res = await fetch(alexaUrl(c.env, "/api/phoenix/state"), {
 		method: "PUT",
 		headers: buildAlexaHeaders(c.env, { "Content-Type": "application/json; charset=utf-8" }),
 		body: requestBody,
@@ -187,11 +185,11 @@ async function controlLightGraphQL(
 		// Use defaults if we can't get device info
 	}
 
-	const res = await fetch(ALEXA_NEXUS_ENDPOINT, {
+	const res = await fetch(alexaUrl(c.env, "/nexus/v1/graphql"), {
 		method: "POST",
 		headers: buildAlexaHeaders(c.env, {
 			"Content-Type": "application/json",
-			"X-Amzn-Marketplace-Id": "ATVPDKIKX0DER",
+			"X-Amzn-Marketplace-Id": c.env.ALEXA_MARKETPLACE_ID,
 			"X-Amzn-Client": "AlexaApp",
 			"X-Amzn-Os-Name": "android",
 			...deviceHeaders,
@@ -213,13 +211,14 @@ export async function listLights(c: Context<{ Bindings: Env }>) {
 
 		// Filter for devices that are lights
 		const lightDevices = smartHomeDevices.filter((device: any) => {
-			const primaryCategory = device.displayInfo?.displayCategories?.primary?.value;
+			const primaryCategory =
+				device.displayCategories?.primary?.value ?? device.displayInfo?.displayCategories?.primary?.value;
 			return primaryCategory === "LIGHT";
 		});
 
 		const lights = lightDevices.map((device: any) => ({
 			id: extractEntityId(device),
-			name: device.favoriteFriendlyName || "Smart Light",
+			name: device.friendlyName || device.favoriteFriendlyName || "Smart Light",
 			capabilities: ["power", "brightness", "color", "colorTemperature"],
 		}));
 

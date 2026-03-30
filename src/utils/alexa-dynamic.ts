@@ -5,7 +5,7 @@ import {
 	SmartHomeFavoritesSchema,
 } from "@/schemas/alexa";
 import type { Env } from "@/types/alexa";
-import { buildAlexaHeaders } from "@/utils/alexa";
+import { alexaUrl, buildAlexaHeaders } from "@/utils/alexa";
 
 // Cache for dynamic values to avoid repeated API calls
 const cache = new Map<string, { value: any; timestamp: number }>();
@@ -29,7 +29,7 @@ export async function getAccountInfo(env: Env) {
 	const cached = getCached<{ customerId: string; profiles: any[] }>(cacheKey);
 	if (cached) return cached;
 
-	const response = await fetch("https://alexa-comms-mobile-service.amazon.com/accounts", {
+	const response = await fetch(alexaUrl(env, "/accounts"), {
 		method: "GET",
 		headers: buildAlexaHeaders(env),
 	});
@@ -64,7 +64,7 @@ export async function getAlexaEndpoints(env: Env) {
 	const cached = getCached<any[]>(cacheKey);
 	if (cached) return cached;
 
-	const response = await fetch("https://alexa.amazon.com/api/smarthome/v2/endpoints", {
+	const response = await fetch(alexaUrl(env, "/api/smarthome/v2/endpoints"), {
 		method: "POST",
 		headers: buildAlexaHeaders(env, {
 			"Content-Type": "application/json; charset=utf-8",
@@ -89,7 +89,7 @@ export async function getAlexaDevices(env: Env) {
 	const cached = getCached<any[]>(cacheKey);
 	if (cached) return cached;
 
-	const response = await fetch("https://alexa.amazon.com/api/devices-v2/device?cached=true", {
+	const response = await fetch(alexaUrl(env, "/api/devices-v2/device?cached=true"), {
 		method: "GET",
 		headers: buildAlexaHeaders(env, {
 			Accept: "application/json; charset=utf-8",
@@ -225,11 +225,11 @@ export async function getSmartHomeFavorites(env: Env) {
     }
   `;
 
-	const response = await fetch("https://alexa.amazon.com/nexus/v1/graphql", {
+	const response = await fetch(alexaUrl(env, "/nexus/v1/graphql"), {
 		method: "POST",
 		headers: buildAlexaHeaders(env, {
 			"Content-Type": "application/json",
-			"X-Amzn-Marketplace-Id": "ATVPDKIKX0DER",
+			"X-Amzn-Marketplace-Id": env.ALEXA_MARKETPLACE_ID,
 			"X-Amzn-Client": "AlexaApp",
 			"X-Amzn-Os-Name": "android",
 		}),
@@ -263,16 +263,9 @@ export async function getSmartHomeFavorites(env: Env) {
 	return favorites;
 }
 
-// Find smart home entities (lights, sensors, etc.) using favorites API
+// Find smart home entities (lights, sensors, etc.) using the full customer endpoint list
 export async function getSmartHomeEntities(env: Env) {
-	const favorites = await getSmartHomeFavorites(env);
-
-	// Filter for active smart home devices
-	const smartHomeDevices = favorites.filter((favorite: any) => {
-		return favorite.active && favorite.type === "ENDPOINT";
-	});
-
-	return smartHomeDevices;
+	return await getCustomerSmartHomeEndpoints(env);
 }
 
 // Get the primary light entity dynamically (first available light)
@@ -281,7 +274,8 @@ export async function getPrimaryLight(env: Env) {
 
 	// Look for devices that are lights
 	const lightDevices = smartHomeDevices.filter((device: any) => {
-		const primaryCategory = device.displayInfo?.displayCategories?.primary?.value;
+		const primaryCategory =
+			device.displayCategories?.primary?.value ?? device.displayInfo?.displayCategories?.primary?.value;
 		return primaryCategory === "LIGHT";
 	});
 
@@ -379,11 +373,11 @@ export async function getCustomerSmartHomeEndpoints(env: Env) {
 		}
 	`;
 
-	const response = await fetch("https://alexa.amazon.com/nexus/v1/graphql", {
+	const response = await fetch(alexaUrl(env, "/nexus/v1/graphql"), {
 		method: "POST",
 		headers: buildAlexaHeaders(env, {
 			"Content-Type": "application/json",
-			"X-Amzn-Marketplace-Id": "ATVPDKIKX0DER",
+			"X-Amzn-Marketplace-Id": env.ALEXA_MARKETPLACE_ID,
 			"X-Amzn-Client": "AlexaApp",
 			"X-Amzn-Os-Name": "android",
 		}),
@@ -444,9 +438,19 @@ export function extractEntityId(device: any): string {
 		return device.alternateIdentifiers.legacyIdentifiers.chrsIdentifier.entityId;
 	}
 
+	// For customer endpoint responses, entity ID may be in legacyIdentifiers
+	if (device.legacyIdentifiers?.chrsIdentifier?.entityId) {
+		return device.legacyIdentifiers.chrsIdentifier.entityId;
+	}
+
 	// For other API responses, check identifier
 	if (device.identifier?.entityId) {
 		return device.identifier.entityId;
+	}
+
+	// Some endpoint responses expose the entityId directly on legacyAppliance
+	if (device.legacyAppliance?.entityId) {
+		return device.legacyAppliance.entityId;
 	}
 
 	// Extract from resource.id if available (favorites format)
