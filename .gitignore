@@ -181,3 +181,5 @@ dist
 #claude
 .claude/
 .vscode/
+# Playwright browser profiles for cookie rotation
+.playwright/
