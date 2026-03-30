@@ -3,10 +3,10 @@ import { z } from "zod";
 // Environment validation schema for Cloudflare Workers
 export const EnvSchema = z.object({
 	/** Amazon ubid-main cookie value */
-	UBID_MAIN: z.string().min(1, "UBID_MAIN is required"),
+	UBID_MAIN: z.string().optional(),
 
 	/** Amazon at-main authentication token */
-	AT_MAIN: z.string().min(1, "AT_MAIN is required"),
+	AT_MAIN: z.string().optional(),
 
 	/** Base URL for Alexa API requests, e.g. https://alexa.amazon.co.uk */
 	ALEXA_BASE_URL: z.string().url("ALEXA_BASE_URL must be a valid URL"),
@@ -19,6 +19,18 @@ export const EnvSchema = z.object({
 
 	/** Base URL for the Alexa API service */
 	API_BASE: z.string().url("API_BASE must be a valid URL"),
+
+	/** Shared secret used to authenticate /update-session requests */
+	UPDATE_SESSION_TOKEN: z.string().min(32).optional(),
+
+	/** Encryption key used to protect rotated Alexa cookies in KV */
+	SESSION_ENCRYPTION_KEY: z.string().min(32).optional(),
+
+	/** Optional TTL for encrypted session data stored in KV, in seconds */
+	SESSION_KV_TTL_SECONDS: z.coerce.number().int().min(3600).max(60 * 60 * 24 * 30).optional(),
+
+	/** KV namespace used to store encrypted session data */
+	SESSION_KV: z.custom<KVNamespace>().optional(),
 
 	/** IANA timezone (e.g. 'America/New_York') for announcement scheduling */
 	TZ: z.string().optional(),
