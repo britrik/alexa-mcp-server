@@ -206,7 +206,23 @@ The server supports both standard MCP transport protocols:
 
 ## Authentication & Security
 
-### Environment Variables
-```bash
-# Required for Alexa API integration
-ALEXA_COOKIES="session_cookies_from_alexa_app"
+### Secret handling
+- Never commit Alexa cookies, tokens, or browser profiles.
+- Keep local rotation secrets in `.env` only for development.
+- Store production secrets with Cloudflare Secrets and Cloudflare KV.
+- The Playwright rotation script must not log cookie values.
+
+### /update-session authorization
+- `POST /update-session` and `POST /api/v1/update-session` are the only supported session update endpoints.
+- Requests must include `Content-Type: application/json`.
+- Requests must be signed with a shared secret in `UPDATE_SESSION_TOKEN`.
+- The request signature uses `X-Session-Timestamp` and `X-Session-Signature`.
+- The signature is `HMAC-SHA256(secret, "<timestamp>.<raw-body>")`.
+- Reject stale requests older than 5 minutes.
+- Do not accept unsigned cookie updates.
+
+### KV storage
+- Rotated cookies are encrypted before being written to `SESSION_KV`.
+- Encryption uses AES-GCM with `SESSION_ENCRYPTION_KEY`.
+- Use an expiration TTL for stored session records.
+- Do not store raw cookies in KV, logs, or source control.
