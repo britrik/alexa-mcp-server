@@ -8,6 +8,8 @@ import { musicHandler } from "@/api/v1/music";
 import { volumeApp } from "@/api/v1/volume";
 import { sensorsApp } from "@/api/v1/sensors";
 import { dndApp } from "@/api/v1/dnd";
+import authApp from "@/api/v1/auth";
+import { soundbarApp } from "@/api/v1/soundbar";
 import { HomeIOMCP } from "@/mcp/server";
 import type { Env } from "@/types/env";
 
@@ -30,6 +32,7 @@ app.get("/", (c) => {
 			volume: "/api/volume",
 			sensors: "/api/sensors",
 			dnd: "/api/dnd",
+			soundbar: "/api/soundbar",
 			mcp: "/mcp",
 			sse: "/sse",
 			health: "/health",
@@ -61,6 +64,12 @@ app.route("/api/sensors", sensorsApp);
 
 // DND routes
 app.route("/api/dnd", dndApp);
+
+// Auth routes (refresh token and OAuth)
+app.route("/api/auth", authApp);
+
+// Soundbar proxy routes
+app.route("/api/soundbar", soundbarApp);
 
 export default {
 	fetch(request: Request, env: Env, ctx: ExecutionContext) {
