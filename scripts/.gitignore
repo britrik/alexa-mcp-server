@@ -1,0 +1,7 @@
+# Local configuration - do not commit
+soundbar-api.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
